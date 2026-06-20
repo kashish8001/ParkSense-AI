@@ -1,7 +1,7 @@
 """Officer deployment recommendation engine."""
 
 from __future__ import annotations
-
+import pandas as pd
 from app.services.data_store import data_store
 from app.services.eps_service import build_priority_zone
 
