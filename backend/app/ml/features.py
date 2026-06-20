@@ -122,40 +122,60 @@ def build_hourly_training_frame(violations: pd.DataFrame, top_n: int | None = No
         violations["h3_index"].value_counts().head(top_n or settings.forecast_top_cells).index.tolist()
     )
     hourly = hourly[hourly["h3_index"].isin(top_cells)].copy()
-    hourly = hourly.sort_values(["h3_index", "hour_bucket"]).reset_index(drop=True)
+    if hourly.empty:
+        return pd.DataFrame()
 
-    feature_rows: list[dict] = []
-    for h3_index, group in hourly.groupby("h3_index"):
-        group = group.sort_values("hour_bucket").set_index("hour_bucket")
-        counts = group["violation_count"]
-        for hour_bucket, row in group.iterrows():
-            lag_1 = counts.shift(1).get(hour_bucket, 0)
-            lag_24 = counts.shift(24).get(hour_bucket, 0)
-            lag_168 = counts.shift(168).get(hour_bucket, 0)
-            rolling_7d = counts.rolling(window=24 * 7, min_periods=1).mean().get(hour_bucket, 0)
-            rolling_30d = counts.rolling(window=24 * 30, min_periods=1).mean().get(hour_bucket, 0)
-            hour = hour_bucket.hour
-            dow = hour_bucket.dayofweek
-            feature_rows.append(
-                {
-                    "h3_index": h3_index,
-                    "hour_bucket": hour_bucket,
-                    "violation_count": row["violation_count"],
-                    "severity_weighted": row["severity_weighted"],
-                    "lag_1h": float(lag_1 or 0),
-                    "lag_24h": float(lag_24 or 0),
-                    "lag_168h": float(lag_168 or 0),
-                    "rolling_7d_mean": float(rolling_7d or 0),
-                    "rolling_30d_mean": float(rolling_30d or 0),
-                    "hour_sin": float(np.sin(2 * np.pi * hour / 24)),
-                    "hour_cos": float(np.cos(2 * np.pi * hour / 24)),
-                    "dow_sin": float(np.sin(2 * np.pi * dow / 7)),
-                    "dow_cos": float(np.cos(2 * np.pi * dow / 7)),
-                    "is_weekend": int(dow >= 5),
-                    "month": hour_bucket.month,
-                }
-            )
-    return pd.DataFrame(feature_rows)
+    # Reconstruct a complete dense hourly range for each cell to align lag features correctly
+    min_time = hourly["hour_bucket"].min()
+    max_time = hourly["hour_bucket"].max()
+    all_hours = pd.date_range(start=min_time, end=max_time, freq="h")
+
+    # Cartesian product of top_cells and all_hours
+    mux = pd.MultiIndex.from_product([top_cells, all_hours], names=["h3_index", "hour_bucket"])
+    dense_df = pd.DataFrame(index=mux).reset_index()
+
+    # Merge sparse data into dense frame
+    dense_df = dense_df.merge(hourly, on=["h3_index", "hour_bucket"], how="left")
+    dense_df["violation_count"] = dense_df["violation_count"].fillna(0.0)
+    dense_df["severity_weighted"] = dense_df["severity_weighted"].fillna(0.0)
+    dense_df["approved_count"] = dense_df["approved_count"].fillna(0)
+
+    # Sort to ensure group shifts are in correct chronological order
+    dense_df = dense_df.sort_values(["h3_index", "hour_bucket"]).reset_index(drop=True)
+
+    # Compute vectorized lag and rolling window features per cell group
+    grouped = dense_df.groupby("h3_index")
+    dense_df["lag_1h"] = grouped["violation_count"].shift(1).fillna(0.0)
+    dense_df["lag_24h"] = grouped["violation_count"].shift(24).fillna(0.0)
+    dense_df["lag_168h"] = grouped["violation_count"].shift(168).fillna(0.0)
+
+    # Use transform with lambda for rolling mean within groups
+    dense_df["rolling_7d_mean"] = (
+        grouped["violation_count"]
+        .transform(lambda x: x.rolling(window=24 * 7, min_periods=1).mean())
+        .fillna(0.0)
+    )
+    dense_df["rolling_30d_mean"] = (
+        grouped["violation_count"]
+        .transform(lambda x: x.rolling(window=24 * 30, min_periods=1).mean())
+        .fillna(0.0)
+    )
+
+    # Compute temporal features
+    hours = dense_df["hour_bucket"].dt.hour
+    dows = dense_df["hour_bucket"].dt.dayofweek
+    dense_df["hour_sin"] = np.sin(2 * np.pi * hours / 24)
+    dense_df["hour_cos"] = np.cos(2 * np.pi * hours / 24)
+    dense_df["dow_sin"] = np.sin(2 * np.pi * dows / 7)
+    dense_df["dow_cos"] = np.cos(2 * np.pi * dows / 7)
+    dense_df["is_weekend"] = (dows >= 5).astype(int)
+    dense_df["month"] = dense_df["hour_bucket"].dt.month
+
+    # Filter back to only the sparse hour records to preserve the exact training record count and shape
+    sparse_keys = hourly[["h3_index", "hour_bucket"]]
+    result = sparse_keys.merge(dense_df, on=["h3_index", "hour_bucket"], how="left")
+    return result
+
 
 
 def build_officer_stats(violations: pd.DataFrame) -> pd.DataFrame:
@@ -164,7 +184,7 @@ def build_officer_stats(violations: pd.DataFrame) -> pd.DataFrame:
         valid.groupby("created_by_id", as_index=False)
         .agg(
             total_records=("id", "count"),
-            approval_rate=("is_approved", lambda s: float((s == True).mean()) if (s == True).any() or (s == False).any() else 0.0),  # noqa: E712
+            approval_rate=("is_approved", lambda s: float(s.mean()) if not s.isnull().all() else 0.0),
             dominant_station=("police_station", lambda s: s.mode().iloc[0] if not s.mode().empty else "Unknown"),
             avg_severity=("severity_score", "mean"),
         )

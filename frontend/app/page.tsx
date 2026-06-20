@@ -7,6 +7,7 @@ import { ExportPanel } from "@/components/dashboard/export-panel";
 import { HotspotMap } from "@/components/dashboard/hotspot-map";
 import { KpiCards } from "@/components/dashboard/kpi-cards";
 import { PriorityZones } from "@/components/dashboard/priority-zones";
+import { HotspotsList } from "@/components/dashboard/hotspots-list";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -99,11 +100,14 @@ export default function DashboardPage() {
 
       <KpiCards summary={summary} />
 
-      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <div className="overflow-hidden rounded-lg border border-border">
+      <div className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
+        <div className="overflow-hidden rounded-lg border border-border h-[536px]">
           <HotspotMap heatmap={heatmap} clusters={clusters} metric={metric} />
         </div>
-        <PriorityZones zones={zones} />
+        <div className="flex flex-col gap-4">
+          <HotspotsList hotspots={clusters} />
+          <PriorityZones zones={zones} />
+        </div>
       </div>
 
       <ChartsSection summary={summary} />

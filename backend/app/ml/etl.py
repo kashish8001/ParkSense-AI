@@ -75,6 +75,10 @@ def load_raw_csv(csv_path: Path | None = None) -> pd.DataFrame:
 def transform_violations(df: pd.DataFrame) -> pd.DataFrame:
     """Clean and enrich raw violation records."""
     result = df.copy()
+    
+    # Drop 100% null columns to optimize memory usage
+    result = result.drop(columns=["description", "closed_datetime", "action_taken_timestamp"], errors="ignore")
+
     result["latitude"] = pd.to_numeric(result["latitude"], errors="coerce")
     result["longitude"] = pd.to_numeric(result["longitude"], errors="coerce")
     result["created_datetime"] = pd.to_datetime(result["created_datetime"], utc=True, errors="coerce")
@@ -98,7 +102,8 @@ def transform_violations(df: pd.DataFrame) -> pd.DataFrame:
     result["validation_status_clean"] = status.replace("nan", np.nan)
 
     result["pin_code"] = result["location"].apply(extract_pin_code)
-    flags = result["location"].apply(extract_location_flags).apply(pd.Series)
+    # Optimized: pd.DataFrame of list of dicts is ~100x faster than applying pd.Series row-by-row
+    flags = pd.DataFrame(list(result["location"].apply(extract_location_flags)), index=result.index)
     result = pd.concat([result, flags], axis=1)
 
     result["vehicle_type"] = result["vehicle_type"].astype(str).str.strip().str.upper()

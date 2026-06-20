@@ -54,6 +54,7 @@ export type HotspotCluster = {
   dominant_junction: string;
   carriageway_blocking_rate: number;
   top_violation_types: string[];
+  location_desc: string;
 };
 
 export type HeatmapGeoJSON = {

@@ -66,13 +66,17 @@ export default function HotspotMapInner({
           pathOptions={{ color: "#38bdf8", fillColor: "#0284c7", fillOpacity: 0.9 }}
         >
           <Popup>
-            <strong>Cluster #{cluster.cluster_id}</strong>
-            <br />
-            EPS: {cluster.eps_score}
-            <br />
-            Violations (7d): {cluster.violation_count}
-            <br />
-            {cluster.dominant_junction}
+            <div className="text-xs space-y-1 font-sans text-foreground">
+              <strong className="text-sm font-semibold">Cluster #{cluster.cluster_id}</strong>
+              <br />
+              <strong>Location:</strong> {cluster.location_desc}
+              <br />
+              <strong>EPS:</strong> {cluster.eps_score.toFixed(2)}
+              <br />
+              <strong>Violations (7d):</strong> {cluster.violation_count}
+              <br />
+              <strong>Junction:</strong> {cluster.dominant_junction}
+            </div>
           </Popup>
         </CircleMarker>
       ))}

@@ -25,6 +25,7 @@ class HotspotCluster:
     carriageway_blocking_rate: float
     top_violation_types: list[str]
     h3_cells: list[str]
+    location_desc: str
 
 
 def run_dbscan_clusters(violations: pd.DataFrame, grid: pd.DataFrame) -> list[HotspotCluster]:
@@ -60,6 +61,14 @@ def run_dbscan_clusters(violations: pd.DataFrame, grid: pd.DataFrame) -> list[Ho
             labels.extend(violation_lookup.get(h3_index, []))
         top_types = pd.Series(labels).value_counts().head(5).index.tolist() if labels else []
 
+        # Identify top locations / address description from geocoded locations in violations
+        cluster_violations = violations[violations["h3_index"].isin(group["h3_index"])]
+        valid_locations = cluster_violations["location"].dropna()
+        top_locations = valid_locations.value_counts().index[:2].tolist()
+        location_desc = " / ".join(top_locations) if top_locations else "Unknown Location"
+        if len(location_desc) > 80:
+            location_desc = location_desc[:77] + "..."
+
         blocking_rate = float(group["carriageway_blocking_rate"].mean())
         clusters.append(
             HotspotCluster(
@@ -74,6 +83,7 @@ def run_dbscan_clusters(violations: pd.DataFrame, grid: pd.DataFrame) -> list[Ho
                 carriageway_blocking_rate=blocking_rate,
                 top_violation_types=top_types,
                 h3_cells=group["h3_index"].tolist(),
+                location_desc=location_desc,
             )
         )
 
@@ -96,6 +106,7 @@ def clusters_to_dict(clusters: list[HotspotCluster]) -> list[dict]:
             "carriageway_blocking_rate": round(cluster.carriageway_blocking_rate, 4),
             "top_violation_types": cluster.top_violation_types,
             "h3_cells": cluster.h3_cells,
+            "location_desc": cluster.location_desc,
         }
         for cluster in clusters
     ]

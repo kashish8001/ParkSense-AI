@@ -6,11 +6,11 @@ import type { PriorityZone } from "@/lib/api";
 
 export function PriorityZones({ zones }: { zones: PriorityZone[] }) {
   return (
-    <Card className="h-full">
-      <CardHeader>
-        <CardTitle>Priority Enforcement Zones</CardTitle>
+    <Card className="h-[260px] flex flex-col">
+      <CardHeader className="py-3 px-4">
+        <CardTitle className="text-sm font-semibold">Priority Enforcement Zones</CardTitle>
       </CardHeader>
-      <CardContent className="max-h-[520px] space-y-3 overflow-y-auto">
+      <CardContent className="flex-1 overflow-y-auto px-4 pb-3 pt-0 space-y-2 max-h-[200px]">
         {zones.map((zone, index) => (
           <div key={zone.h3_index} className="rounded-md border border-border bg-secondary/40 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
