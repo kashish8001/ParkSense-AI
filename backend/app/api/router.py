@@ -172,7 +172,7 @@ def junctions(top: int = Query(20, ge=1, le=200)) -> dict:
 
 
 @router.get("/stations")
-def stations(top: int = Query(20, ge=1, le=100)) -> dict:
+def stations(top: int = Query(100, ge=1, le=200)) -> dict:
     _ensure_ready()
     stats = data_store.station_stats.head(top)
     return {"stations": stats.to_dict(orient="records")}

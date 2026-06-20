@@ -82,7 +82,8 @@ class ViolationForecaster:
         return result
 
     def predict_latest_by_cell(self, frame: pd.DataFrame) -> pd.DataFrame:
-        latest = frame.sort_values("hour_bucket").groupby("h3_index", as_index=False).tail(1)
+        max_time = frame["hour_bucket"].max()
+        latest = frame[frame["hour_bucket"] == max_time].copy()
         predicted = self.predict_frame(latest)
         return predicted[["h3_index", "hour_bucket", "predicted_count"]]
 

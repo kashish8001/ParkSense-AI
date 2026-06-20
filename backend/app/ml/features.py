@@ -172,8 +172,15 @@ def build_hourly_training_frame(violations: pd.DataFrame, top_n: int | None = No
     dense_df["month"] = dense_df["hour_bucket"].dt.month
 
     # Filter back to only the sparse hour records to preserve the exact training record count and shape
+    # ALSO ensure that the absolute latest hour is included for all cells so we can predict for the same latest hour!
     sparse_keys = hourly[["h3_index", "hour_bucket"]]
-    result = sparse_keys.merge(dense_df, on=["h3_index", "hour_bucket"], how="left")
+    latest_keys = pd.DataFrame({
+        "h3_index": top_cells,
+        "hour_bucket": max_time
+    })
+    combined_keys = pd.concat([sparse_keys, latest_keys]).drop_duplicates(subset=["h3_index", "hour_bucket"]).reset_index(drop=True)
+
+    result = combined_keys.merge(dense_df, on=["h3_index", "hour_bucket"], how="left")
     return result
 
 
@@ -197,9 +204,23 @@ def build_officer_stats(violations: pd.DataFrame) -> pd.DataFrame:
 def build_station_stats(violations: pd.DataFrame, grid: pd.DataFrame) -> pd.DataFrame:
     station_counts = violations["police_station"].value_counts().rename("total_violations").reset_index()
     station_counts.columns = ["police_station", "total_violations"]
+
+    # Calculate violations in the last 7 days for each station
+    max_date = violations["created_datetime"].max()
+    cutoff_7d = max_date - pd.Timedelta(days=7)
+    recent_7d = violations[violations["created_datetime"] >= cutoff_7d]
+    recent_counts = recent_7d["police_station"].value_counts().rename("violations_7d").reset_index()
+    recent_counts.columns = ["police_station", "violations_7d"]
+
     station_pii = grid.groupby("dominant_station")["pii_score"].mean().rename("avg_pii").reset_index()
     station_pii.columns = ["police_station", "avg_pii"]
-    return station_counts.merge(station_pii, on="police_station", how="left").fillna({"avg_pii": 0.0})
+
+    stats = station_counts.merge(recent_counts, on="police_station", how="left").fillna({"violations_7d": 0})
+    stats["violations_7d"] = stats["violations_7d"].astype(int)
+    stats = stats.merge(station_pii, on="police_station", how="left").fillna({"avg_pii": 0.0})
+    
+    # Sort by recent 7-day violations, then by total violations
+    return stats.sort_values(by=["violations_7d", "total_violations"], ascending=False).reset_index(drop=True)
 
 
 def build_junction_stats(violations: pd.DataFrame) -> pd.DataFrame:
