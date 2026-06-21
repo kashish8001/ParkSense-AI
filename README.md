@@ -30,10 +30,19 @@ parksense ai/
 ### 1. Backend
 
 ```bash
+# Create and activate virtual environment
 cd backend
-py -3 -m pip install -r requirements.txt
-py -3 run_pipeline.py
-py -3 -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+python -m venv venv
+
+# On Windows:
+.\venv\Scripts\activate
+# On macOS/Linux:
+# source venv/bin/activate
+
+# Install dependencies and run
+pip install -r requirements.txt
+python run_pipeline.py
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 API docs: http://127.0.0.1:8000/docs
